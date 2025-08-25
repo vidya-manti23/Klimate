@@ -280,30 +280,57 @@ async function nextFiveDays(lat, lon) {
 }
 
 async function todayTemps(lat, lon) {
-  const apiUrl = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=8f042e4321335d27d1b7d60799ec8de6&units=metric`;
-  const response = await fetch(apiUrl);
-  const data = await response.json();
+  try {
+    const apiUrl = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=8f042e4321335d27d1b7d60799ec8de6&units=metric`;
+    const response = await fetch(apiUrl);
+    const data = await response.json();
 
-  const todayDate = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
-  const targetTimes = ["12:00:00", "15:00:00", "18:00:00", "21:00:00"];
+    // find first forecast entry that is at or after "now" (local time)
+    const now = new Date();
+    let startIndex = data.list.findIndex(item => new Date(item.dt * 1000) >= now);
+    if (startIndex === -1) startIndex = 0; // fallback to start if none >= now
 
-  let todayForecasts = data.list.filter(item =>
-    item.dt_txt.startsWith(todayDate) &&
-    targetTimes.includes(item.dt_txt.split(" ")[1])
-  );
+    // take next 4 forecast slots from that index
+    const nextFour = data.list.slice(startIndex, startIndex + 4);
 
-  let tempDivs = document.querySelectorAll("#todaytempcontainer .todaytemp");
+    // debug log (open DevTools console to inspect)
+    console.log("todayTemps - nextFour times:", nextFour.map(s => new Date(s.dt * 1000).toString()));
 
-  todayForecasts.forEach((item, idx) => {
-    let temp = item.main.temp.toFixed(1);
-    let icon = item.weather[0].icon;
+    const tempDivs = document.querySelectorAll("#todaytempcontainer .todaytemp");
 
-    // update temperature
-    tempDivs[idx].querySelector("h5").innerText = temp + "°C";
-    // update icon
-    tempDivs[idx].querySelector("img").src = `http://openweathermap.org/img/wn/${icon}.png`;
-  });
+    // update each .todaytemp card (there are 4 in your HTML)
+    for (let i = 0; i < tempDivs.length; i++) {
+      const card = tempDivs[i];
+      const slot = nextFour[i];
+
+      // DOM elements (matches your HTML: first h6 = time, img, h5 = temp)
+      const timeElem = card.querySelector("h6");
+      const imgElem = card.querySelector("img");
+      const tempElem = card.querySelector("h5");
+
+      if (slot) {
+        const localDt = new Date(slot.dt * 1000);
+        timeElem.innerText = localDt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        tempElem.innerText = slot.main.temp.toFixed(1) + "°C";
+        imgElem.src = `https://openweathermap.org/img/wn/${slot.weather[0].icon}@2x.png`;
+        imgElem.alt = slot.weather[0].description || "";
+      } else {
+        // placeholder if API doesn't have enough slots
+        timeElem.innerText = "--:--";
+        tempElem.innerText = "- °C";
+        imgElem.src = "https://cdn-icons-png.flaticon.com/512/1192/1192396.png";
+        imgElem.alt = "weather";
+      }
+    }
+  } catch (err) {
+    console.error("todayTemps error:", err);
+  }
 }
+
+
+
+
+
 
 
 
